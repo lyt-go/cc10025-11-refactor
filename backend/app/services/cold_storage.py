@@ -12,6 +12,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
+from app.services import audit_events
 from app.services.base import BaseModuleService
 from app.store import store
 
@@ -52,7 +53,7 @@ class ColdStorageService(BaseModuleService):
         self._update_cost_tracker(asset_id, target_storage)
 
         # 记录审计日志
-        self._write_audit_entry(
+        audit_events.append_audit_entry(
             entity="冷存任务",
             action="发起迁移",
             target_id=str(entry.get("任务编号", "")),
@@ -150,23 +151,3 @@ class ColdStorageService(BaseModuleService):
             "任务状态": "排队中",
         }
         hot_rows.append(prefetch)
-
-    def _write_audit_entry(self, entity: str, action: str, target_id: str,
-                           detail: str) -> None:
-        audit_rows = store.rows("audit_log")
-        next_id = max((int(r.get("id", 0)) for r in audit_rows), default=0) + 1
-        entry = {
-            "id": next_id,
-            "status": "已记录",
-            "pending": False,
-            "abnormal": False,
-            "记录编号": f"AUDI-{next_id:04d}",
-            "操作主体": entity,
-            "操作类型": action,
-            "操作对象": target_id,
-            "操作时间": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            "影响范围": detail,
-            "审计摘要": detail,
-            "归档状态": "已记录",
-        }
-        audit_rows.append(entry)

@@ -1,0 +1,10 @@
+{
+  "snapshot_id": "VERS-T0003",
+  "asset_id": "ASSE-0003",
+  "snapshot_time": "2026-11-22",
+  "data_volume": "10MB",
+  "snapshot_type": "手动快照",
+  "retention_days": "30",
+  "dependent_snapshot": "",
+  "status": "已完成"
+}

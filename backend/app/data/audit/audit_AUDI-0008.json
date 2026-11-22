@@ -1,0 +1,10 @@
+{
+  "record_id": "AUDI-0008",
+  "subject": "数据资产",
+  "operation": "发布",
+  "target": "ASSE-9003",
+  "operated_at": "2026-11-22",
+  "scope": "并发重放演练",
+  "summary": "并发重放演练",
+  "archived_at": "2026-11-22T14:17:45.034170+00:00"
+}

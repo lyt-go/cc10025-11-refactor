@@ -18,6 +18,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
+from app.services import audit_events
 from app.services.base import BaseModuleService
 from app.store import store
 
@@ -81,7 +82,7 @@ class AssetCatalogService(BaseModuleService):
         self._seed_lineage_node(asset_id, asset_name, domain)
 
         # 记录审计日志
-        self._write_audit_entry(
+        audit_events.append_audit_entry(
             entity="数据资产",
             action="发布",
             target_id=asset_id,
@@ -107,7 +108,7 @@ class AssetCatalogService(BaseModuleService):
         self._revoke_access_gates(str(entry.get("资产编号", "")))
 
         # 记录审计
-        self._write_audit_entry(
+        audit_events.append_audit_entry(
             entity="数据资产",
             action="归档",
             target_id=str(entry.get("资产编号", "")),
@@ -229,24 +230,3 @@ class AssetCatalogService(BaseModuleService):
             if str(row.get("目标资产")) == asset_id and row.get("status") != "已撤销":
                 row["status"] = "已撤销"
                 row["pending"] = False
-
-    def _write_audit_entry(self, entity: str, action: str, target_id: str,
-                           detail: str) -> None:
-        """写入审计日志。"""
-        audit_rows = store.rows("audit_log")
-        next_id = max((int(r.get("id", 0)) for r in audit_rows), default=0) + 1
-        entry = {
-            "id": next_id,
-            "status": "已记录",
-            "pending": False,
-            "abnormal": False,
-            "记录编号": f"AUDI-{next_id:04d}",
-            "操作主体": entity,
-            "操作类型": action,
-            "操作对象": target_id,
-            "操作时间": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            "影响范围": detail,
-            "审计摘要": detail,
-            "归档状态": "已记录",
-        }
-        audit_rows.append(entry)

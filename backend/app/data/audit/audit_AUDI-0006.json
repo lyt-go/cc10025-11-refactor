@@ -1,0 +1,10 @@
+{
+  "record_id": "AUDI-0006",
+  "subject": "版本快照",
+  "operation": "创建",
+  "target": "VERS-T0003",
+  "operated_at": "2026-11-22",
+  "scope": "快照创建: ASSE-0003",
+  "summary": "快照创建: ASSE-0003",
+  "archived_at": "2026-11-22T14:17:45.031885+00:00"
+}

@@ -6,6 +6,8 @@
     cold_storage → audit_log: 冷存迁移审计
     compliance_check → audit_log: 合规扫描审计
     audit_log → quality_report: 审计异常纳入质量报告
+
+审计事件的装配、序列化与归档确认统一收拢在 app.services.audit_events。
 """
 from __future__ import annotations
 
@@ -14,10 +16,11 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
+from app.services import audit_events
 from app.services.base import BaseModuleService
 from app.store import store
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "audit")
+DATA_DIR = audit_events.ARCHIVE_DIR
 
 
 class AuditLogService(BaseModuleService):
@@ -35,20 +38,26 @@ class AuditLogService(BaseModuleService):
         os.makedirs(DATA_DIR, exist_ok=True)
 
     def archive_logs(self, entry_id: int) -> tuple[dict[str, Any] | None, str]:
-        """归档审计日志：将已校验的日志写入持久化文件。"""
+        """归档审计日志：将已校验的日志写入持久化文件。
+
+        幂等：同一事件重复归档（含归档中断后的重放、并发重放）只确认
+        一次，质量报告中的异常也只核算一次；档案文件损坏时按条目当前
+        字段重建，条目的操作时间与分类口径保持不变。
+        """
         entry = store.find(self.MODULE, entry_id)
         if entry is None:
             return None, f"{self.ENTITY} {entry_id} 不存在"
+        if not audit_events.can_restore_governance_event(entry):
+            return None, f"{self.ENTITY} {entry_id} 字段不完整，无法还原治理操作"
 
-        entry["status"] = "已归档"
-        entry["pending"] = False
-        entry["归档状态"] = "已归档"
+        try:
+            _, first_confirm = audit_events.confirm_archive(entry)
+        except OSError as exc:
+            return None, f"{self.ENTITY} {entry_id} 归档写入失败：{exc}"
 
-        # 写入审计归档文件
-        self._write_audit_archive(entry)
-
-        # 统计审计日志并更新质量报告
-        self._update_quality_from_audit()
+        if first_confirm:
+            # 统计审计日志并更新质量报告（仅首次确认时核算，重放不重复计数）
+            self._update_quality_from_audit()
 
         return entry, f"{self.ENTITY} {entry_id} 已归档"
 
@@ -79,23 +88,6 @@ class AuditLogService(BaseModuleService):
         if action == "提交归档":
             return self.archive_logs(entry_id)
         return super().run_action(entry_id, action)
-
-    def _write_audit_archive(self, entry: dict[str, Any]) -> None:
-        record_id = str(entry.get("记录编号", ""))
-        filename = f"audit_{record_id}.json"
-        path = os.path.join(DATA_DIR, filename)
-        record = {
-            "record_id": record_id,
-            "subject": str(entry.get("操作主体", "")),
-            "operation": str(entry.get("操作类型", "")),
-            "target": str(entry.get("操作对象", "")),
-            "operated_at": str(entry.get("操作时间", "")),
-            "scope": str(entry.get("影响范围", "")),
-            "summary": str(entry.get("审计摘要", "")),
-            "archived_at": datetime.now(timezone.utc).isoformat(),
-        }
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(record, f, ensure_ascii=False, indent=2, default=str)
 
     def _update_quality_from_audit(self) -> None:
         rows = store.rows(self.MODULE)

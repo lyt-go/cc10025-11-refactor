@@ -12,6 +12,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
+from app.services import audit_events
 from app.services.base import BaseModuleService
 from app.store import store
 
@@ -71,7 +72,7 @@ class ComplianceCheckService(BaseModuleService):
         self._write_check_result(str(entry.get("规则编号", "")), result)
 
         # 写入审计日志
-        self._write_audit_entry(
+        audit_events.append_audit_entry(
             entity="合规检查",
             action="执行扫描",
             target_id=str(entry.get("规则编号", "")),
@@ -94,26 +95,6 @@ class ComplianceCheckService(BaseModuleService):
         path = os.path.join(DATA_DIR, filename)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False, indent=2, default=str)
-
-    def _write_audit_entry(self, entity: str, action: str, target_id: str,
-                           detail: str) -> None:
-        audit_rows = store.rows("audit_log")
-        next_id = max((int(r.get("id", 0)) for r in audit_rows), default=0) + 1
-        entry = {
-            "id": next_id,
-            "status": "已记录",
-            "pending": False,
-            "abnormal": False,
-            "记录编号": f"AUDI-{next_id:04d}",
-            "操作主体": entity,
-            "操作类型": action,
-            "操作对象": target_id,
-            "操作时间": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            "影响范围": detail,
-            "审计摘要": detail,
-            "归档状态": "已记录",
-        }
-        audit_rows.append(entry)
 
     def _update_quality_report(self, dimension: str, total: int, violations: int) -> None:
         quality_rows = store.rows("quality_report")
